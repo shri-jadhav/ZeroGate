@@ -255,7 +255,8 @@ def validate_iam_and_oidc_policy_data(
                         f"OIDC trust policy contains forbidden wildcard in subject: '{sub}'",
                         source_name,
                     )
-                if not sub.startswith(f"repo:{expected_repo}:"):
+                normalized_sub = re.sub(r"@\d+", "", sub)
+                if not normalized_sub.startswith(f"repo:{expected_repo}:"):
                     result.add_violation(
                         "IAM_OIDC",
                         "ZG-OIDC-004",

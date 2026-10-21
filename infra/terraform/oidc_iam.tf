@@ -35,7 +35,9 @@ data "aws_iam_policy_document" "github_deploy_trust" {
       variable = "token.actions.githubusercontent.com:sub"
       values = [
         "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/${var.github_branch}",
-        "repo:${var.github_org}/${var.github_repo}:environment:${var.github_environment}"
+        "repo:${var.github_org}/${var.github_repo}:environment:${var.github_environment}",
+        "repo:${var.github_org}@210805622/${var.github_repo}@1428816555:ref:refs/heads/${var.github_branch}",
+        "repo:${var.github_org}@210805622/${var.github_repo}@1428816555:environment:${var.github_environment}"
       ]
     }
   }
