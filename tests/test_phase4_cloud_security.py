@@ -11,13 +11,20 @@ Tests:
 
 from __future__ import annotations
 
+import io
 import json
+import shutil
 import subprocess
+import sys
 import time
+import xml.etree.ElementTree as ET
+from functools import lru_cache
 from pathlib import Path
+from typing import Any, Dict, List
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.config import Config as BotoConfig
+from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 import pytest
 
 from dlp.s3_scanner import S3ReadOnlyDLPScanner
@@ -42,6 +49,45 @@ DEPLOY_ROLE_NAME = "zerogate-cloud-lab-github-deploy-role"
 ANALYST_ROLE_NAME = "zerogate-cloud-lab-readonly-analyst-role"
 ANALYST_ROLE_ARN = f"arn:aws:iam::{ACCOUNT_ID}:role/{ANALYST_ROLE_NAME}"
 UNRELATED_BUCKET_NAME = f"drainsentinel-photos-{ACCOUNT_ID}-{AWS_REGION}"
+WAZUH_CONTAINER_ID = "92f340a33a678b300c0cbef447d28161fc65e3f0005fb4353dee87932a2852a5"
+
+
+@lru_cache(maxsize=1)
+def _has_live_aws_credentials() -> bool:
+    """Returns True only when live AWS credentials for the ZeroGate account are available."""
+    try:
+        session = boto3.Session(region_name=AWS_REGION)
+        if session.get_credentials() is None:
+            return False
+        sts = session.client(
+            "sts",
+            region_name=AWS_REGION,
+            config=BotoConfig(connect_timeout=2, read_timeout=2, retries={"max_attempts": 1}),
+        )
+        ident = sts.get_caller_identity()
+        return ident.get("Account") == ACCOUNT_ID
+    except (BotoCoreError, ClientError, NoCredentialsError, OSError):
+        return False
+
+
+@lru_cache(maxsize=1)
+def _has_local_wsl_wazuh() -> bool:
+    """Returns True only when the local Windows WSL2 Wazuh Manager container is reachable."""
+    if sys.platform != "win32" or shutil.which("wsl") is None:
+        return False
+    try:
+        proc = subprocess.run(
+            [
+                "wsl", "-u", "root", "-d", "Ubuntu", "--",
+                "ctr", "-n", "moby", "tasks", "ls",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return proc.returncode == 0 and WAZUH_CONTAINER_ID in proc.stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
 
 
 # ============================================================================
@@ -118,8 +164,172 @@ class TestPolicyAsCodeAndNegativeFixtures:
 
 
 # ============================================================================
-# 2. Live AWS OIDC, IAM Least-Privilege, S3 Security & Read-Only DLP Tests
+# 2. Deterministic Unit Tests Using Isolated Test Doubles (No Live AWS/WSL)
 # ============================================================================
+class FakeReadOnlyS3Client:
+    """Isolated read-only S3 test double for unit-testing S3ReadOnlyDLPScanner in CI."""
+
+    def __init__(self, objects: Dict[str, bytes]) -> None:
+        self.objects = objects
+        self.calls: List[str] = []
+
+    def list_objects_v2(self, Bucket: str, Prefix: str = "", MaxKeys: int = 50) -> Dict[str, Any]:
+        self.calls.append(f"list_objects_v2:{Bucket}:{Prefix}")
+        contents = [
+            {"Key": k, "Size": len(v)}
+            for k, v in self.objects.items()
+            if k.startswith(Prefix)
+        ][:MaxKeys]
+        return {"Contents": contents}
+
+    def get_object(self, Bucket: str, Key: str) -> Dict[str, Any]:
+        self.calls.append(f"get_object:{Bucket}:{Key}")
+        return {"Body": io.BytesIO(self.objects[Key])}
+
+
+class FakeCloudTrailClient:
+    """Isolated CloudTrail test double for unit-testing CloudTrail-to-Wazuh bridge in CI."""
+
+    def __init__(self, events: List[Dict[str, Any]]) -> None:
+        self.events = events
+
+    def lookup_events(self, MaxResults: int = 10) -> Dict[str, Any]:
+        return {"Events": self.events[:MaxResults]}
+
+
+class TestCloudSecurityUnitWithIsolatedDoubles:
+    """
+    Deterministic unit tests for S3ReadOnlyDLPScanner, CloudTrail-to-Wazuh formatting,
+    and Wazuh cloud rule XML definitions. Runs in CI without requiring live AWS credentials.
+    """
+
+    def test_s3_readonly_dlp_scanner_unit_with_isolated_s3_double(self):
+        synthetic_body = (
+            "Record ID: ZG-SYNTH-2026-0042\n"
+            "Synthetic Aadhaar: 2345 6789 0124\n"
+            "Synthetic PAN: ABCPE1234F\n"
+            "Canary Token: zg_test_9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d\n"
+        ).encode("utf-8")
+        fake_s3 = FakeReadOnlyS3Client(
+            {
+                "samples/": b"",
+                "samples/synthetic_onboarding_record.txt": synthetic_body,
+                "samples/benign_readme.txt": b"General architecture notes with zero sensitive fields.",
+            }
+        )
+
+        s3_dlp = S3ReadOnlyDLPScanner(
+            s3_client=fake_s3,
+            region_name=AWS_REGION,
+            wazuh_syslog_host="127.0.0.1",
+            wazuh_syslog_port=65514,
+        )
+        reports = s3_dlp.scan_bucket_prefix(
+            bucket=LAB_BUCKET_NAME,
+            prefix="samples/",
+            forward_to_wazuh=True,
+        )
+
+        assert len(reports) == 2
+        assert fake_s3.calls == [
+            f"list_objects_v2:{LAB_BUCKET_NAME}:samples/",
+            f"get_object:{LAB_BUCKET_NAME}:samples/synthetic_onboarding_record.txt",
+            f"get_object:{LAB_BUCKET_NAME}:samples/benign_readme.txt",
+        ]
+
+        sensitive_report = reports[0].to_safe_dict()
+        assert sensitive_report["has_sensitive_data"] is True
+        assert sensitive_report["total_matches"] >= 3
+        detectors = {f["detector"] for f in sensitive_report["findings"]}
+        assert "IN_AADHAAR" in detectors
+        assert "IN_PAN" in detectors
+
+        serialized = json.dumps(sensitive_report)
+        assert "2345 6789 0124" not in serialized
+        assert "ABCPE1234F" not in serialized
+        assert "zg_test_9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d" not in serialized
+
+        benign_report = reports[1].to_safe_dict()
+        assert benign_report["has_sensitive_data"] is False
+        assert benign_report["total_matches"] == 0
+
+    def test_cloudtrail_to_wazuh_bridge_unit_with_isolated_ct_double(self):
+        events = [
+            {
+                "EventName": "AssumeRoleWithWebIdentity",
+                "EventSource": "sts.amazonaws.com",
+                "Username": "repo:shri-jadhav/ZeroGate:ref:refs/heads/main",
+                "CloudTrailEvent": json.dumps({"awsRegion": "ap-south-1"}),
+            },
+            {
+                "EventName": "DeleteObject",
+                "EventSource": "s3.amazonaws.com",
+                "Username": "zerogate-cloud-lab-readonly-analyst-role",
+                "CloudTrailEvent": json.dumps({"errorCode": "AccessDenied", "awsRegion": "ap-south-1"}),
+            },
+            {
+                "EventName": "GetBucketVersioning",
+                "EventSource": "s3.amazonaws.com",
+                "Username": "zerogate-cloud-lab-github-deploy-role",
+                "CloudTrailEvent": json.dumps({"errorCode": "SlowDown", "awsRegion": "ap-south-1"}),
+            },
+        ]
+        audit_line = format_cloudtrail_event_for_wazuh(events[0])
+        assert "CLOUDTRAIL_AUDIT" in audit_line
+        assert "event=AssumeRoleWithWebIdentity" in audit_line
+        assert "status=Success" in audit_line
+
+        denied_line = format_cloudtrail_event_for_wazuh(events[1])
+        assert "CLOUDTRAIL_DENIED" in denied_line
+        assert "event=DeleteObject" in denied_line
+        assert "status=AccessDenied" in denied_line
+
+        error_line = format_cloudtrail_event_for_wazuh(events[2])
+        assert "CLOUDTRAIL_ERROR" in error_line
+        assert "status=SlowDown" in error_line
+
+        forwarded = forward_cloudtrail_events_to_wazuh(
+            region_name=AWS_REGION,
+            max_results=3,
+            wazuh_host="127.0.0.1",
+            wazuh_port=65514,
+            ct_client=FakeCloudTrailClient(events),
+        )
+        assert len(forwarded) == 3
+
+    def test_wazuh_cloud_rules_and_decoders_xml_structure_unit(self):
+        decoder_path = REPO_ROOT / "soc" / "wazuh" / "decoders" / "local_decoder.xml"
+        rules_path = REPO_ROOT / "soc" / "wazuh" / "rules" / "local_rules.xml"
+
+        decoder_xml = "<root>\n" + decoder_path.read_text(encoding="utf-8") + "\n</root>"
+        rules_xml = "<root>\n" + rules_path.read_text(encoding="utf-8") + "\n</root>"
+
+        dec_root = ET.fromstring(decoder_xml)
+        rules_root = ET.fromstring(rules_xml)
+
+        decoder_names = {d.attrib.get("name") for d in dec_root.findall("decoder")}
+        assert "zerogate-cloudtrail" in decoder_names
+
+        rules_by_id = {
+            r.attrib.get("id"): r
+            for group in rules_root.findall("group")
+            for r in group.findall("rule")
+        }
+        assert "100250" in rules_by_id
+        assert "100251" in rules_by_id
+        assert "100252" in rules_by_id
+        assert rules_by_id["100250"].attrib.get("level") == "6"
+        assert rules_by_id["100251"].attrib.get("level") == "9"
+        assert rules_by_id["100252"].attrib.get("level") == "9"
+
+
+# ============================================================================
+# 3. External Service Integration Tests: Live AWS OIDC, IAM, S3 & CloudTrail
+# ============================================================================
+@pytest.mark.skipif(
+    not _has_live_aws_credentials(),
+    reason="Live AWS credentials for account 816954357920 not present in this environment (e.g. unauthenticated CI gate)",
+)
 class TestLiveAWSInfrastructureAndSecurity:
     """Verifies deployed AWS resources, OIDC trust policies, S3 security, and role boundaries."""
 
@@ -242,11 +452,15 @@ class TestLiveAWSInfrastructureAndSecurity:
 
 
 # ============================================================================
-# 3. CloudTrail Audit & Wazuh SIEM Cloud Detection Rules (100250, 100251, 100252)
+# 4. Local SIEM & CloudTrail Integration Tests (Wazuh Rules 100250, 100251, 100252)
 # ============================================================================
 class TestCloudTrailAndWazuhSIEMIntegration:
     """Verifies CloudTrail trail status, management event recording, and Wazuh SIEM detection."""
 
+    @pytest.mark.skipif(
+        not _has_live_aws_credentials(),
+        reason="Live AWS credentials for account 816954357920 not present in this environment",
+    )
     def test_live_cloudtrail_trail_status_and_event_lookup(self):
         ct = boto3.client("cloudtrail", region_name=AWS_REGION)
 
@@ -264,6 +478,10 @@ class TestCloudTrailAndWazuhSIEMIntegration:
         assert len(forwarded) >= 1
         assert all("zerogate-cloud cloudtrail:" in line for line in forwarded)
 
+    @pytest.mark.skipif(
+        not _has_local_wsl_wazuh(),
+        reason="Local WSL2 Wazuh Manager container not available in this environment",
+    )
     def test_wazuh_rule_100250_cloudtrail_management_and_oidc_event(self):
         """Rule 100250 fires when CloudTrail records AssumeRoleWithWebIdentity or management actions."""
         log_event = (
@@ -274,7 +492,7 @@ class TestCloudTrailAndWazuhSIEMIntegration:
         cmd = [
             "wsl", "-u", "root", "-d", "Ubuntu", "--",
             "ctr", "-n", "moby", "task", "exec", "--exec-id", f"t-ct-250-{int(time.time()*1000)%100000}",
-            "92f340a33a678b300c0cbef447d28161fc65e3f0005fb4353dee87932a2852a5",
+            WAZUH_CONTAINER_ID,
             "/bin/bash", "-c", f"echo '{log_event}' | /var/ossec/bin/wazuh-logtest",
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -284,6 +502,10 @@ class TestCloudTrailAndWazuhSIEMIntegration:
         assert "T1078.004" in output
         assert "Alert to be generated." in output
 
+    @pytest.mark.skipif(
+        not _has_local_wsl_wazuh(),
+        reason="Local WSL2 Wazuh Manager container not available in this environment",
+    )
     def test_wazuh_rule_100251_cloudtrail_access_denied(self):
         """Rule 100251 fires at Level 9 when CloudTrail records an AccessDenied violation."""
         log_event = (
@@ -294,7 +516,7 @@ class TestCloudTrailAndWazuhSIEMIntegration:
         cmd = [
             "wsl", "-u", "root", "-d", "Ubuntu", "--",
             "ctr", "-n", "moby", "task", "exec", "--exec-id", f"t-ct-251-{int(time.time()*1000)%100000}",
-            "92f340a33a678b300c0cbef447d28161fc65e3f0005fb4353dee87932a2852a5",
+            WAZUH_CONTAINER_ID,
             "/bin/bash", "-c", f"echo '{log_event}' | /var/ossec/bin/wazuh-logtest",
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -304,6 +526,10 @@ class TestCloudTrailAndWazuhSIEMIntegration:
         assert "T1580" in output
         assert "Alert to be generated." in output
 
+    @pytest.mark.skipif(
+        not _has_local_wsl_wazuh(),
+        reason="Local WSL2 Wazuh Manager container not available in this environment",
+    )
     def test_wazuh_rule_100252_s3_cloud_dlp_finding(self):
         """Rule 100252 fires at Level 9 when S3ReadOnlyDLPScanner detects PII/secrets in S3."""
         log_event = (
@@ -314,7 +540,7 @@ class TestCloudTrailAndWazuhSIEMIntegration:
         cmd = [
             "wsl", "-u", "root", "-d", "Ubuntu", "--",
             "ctr", "-n", "moby", "task", "exec", "--exec-id", f"t-ct-252-{int(time.time()*1000)%100000}",
-            "92f340a33a678b300c0cbef447d28161fc65e3f0005fb4353dee87932a2852a5",
+            WAZUH_CONTAINER_ID,
             "/bin/bash", "-c", f"echo '{log_event}' | /var/ossec/bin/wazuh-logtest",
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)

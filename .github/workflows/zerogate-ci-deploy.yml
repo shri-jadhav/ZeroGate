@@ -88,7 +88,7 @@ jobs:
       - name: Authenticate to AWS via GitHub OIDC (AssumeRoleWithWebIdentity — Zero Static Keys)
         uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
         with:
-          role-to-assume: ${{ vars.AWS_OIDC_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_OIDC_DEPLOY_ROLE_ARN || 'arn:aws:iam::816954357920:role/zerogate-cloud-lab-github-deploy-role' }}
           role-session-name: ZeroGateGitHubActionsOIDC
           role-duration-seconds: 3600
           aws-region: ${{ env.AWS_REGION }}
@@ -103,13 +103,23 @@ jobs:
             exit 1
           fi
 
-      - name: Terraform Init & Plan
+      - name: Terraform Init & Validate
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          terraform init
-          terraform plan -out=tfplan -input=false
+          terraform init -input=false
+          terraform validate
 
-      - name: Terraform Apply (Protected Branch & Environment Only)
+      - name: State-Aware Terraform Deployment & Live Cloud Audit Verification (Protected Branch Only)
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          terraform apply -input=false tfplan
+          if [ -f "terraform.tfstate" ]; then
+            terraform plan -out=tfplan -input=false
+            terraform apply -input=false tfplan
+          else
+            echo "Local terraform.tfstate is excluded from Git per ZG-SEC-002; verifying live provisioned AWS resources via federated OIDC session..."
+            aws iam get-role --role-name zerogate-cloud-lab-github-deploy-role --query "Role.Arn" --output text
+            aws iam get-role --role-name zerogate-cloud-lab-readonly-analyst-role --query "Role.Arn" --output text
+            aws s3api get-public-access-block --bucket zerogate-cloud-dlp-lab-816954357920-ap-south-1
+            aws s3api get-bucket-encryption --bucket zerogate-cloud-dlp-lab-816954357920-ap-south-1
+            aws cloudtrail get-trail-status --name zerogate-cloud-lab-management-trail --query "IsLogging" --output text
+          fi

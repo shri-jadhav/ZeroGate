@@ -232,3 +232,46 @@ class TestDomainOverallAssessment:
         assert "dmarc" in d
         assert "overall_score" in d
         assert "disclaimer" in d
+
+
+class TestEmailPackageStdlibCoexistence:
+    """
+    Regression tests for CI pytest_sessionstart INTERNALERROR:
+    Ensures the top-level ZeroGate 'email' package properly bridges Python's
+    standard library 'email' submodules across Linux, macOS, and Windows.
+    """
+
+    def test_stdlib_email_submodules_and_importlib_metadata_coexist(self):
+        import email
+        import email.message
+        import email.parser
+        import email.policy
+        import email.utils
+        import importlib.metadata
+        import os
+
+        std_dir = email._resolve_stdlib_email_dir()
+        assert os.path.isdir(std_dir)
+        assert os.path.isfile(os.path.join(std_dir, "message.py"))
+        assert std_dir in email.__path__
+
+        # Exact call path triggered by pytest_sessionstart -> pluggy.__version__
+        assert importlib.metadata.version("pluggy")
+        assert importlib.metadata.version("pytest")
+
+        # Verify stdlib email functionality works alongside ZeroGate EmailSecurityChecker
+        msg = email.message_from_string("Subject: ZeroGate CI Test\n\nBody text")
+        assert isinstance(msg, email.message.Message)
+        assert msg["Subject"] == "ZeroGate CI Test"
+        assert email.PolicyLevel.STRONG.value == "STRONG"
+        assert email.EmailSecurityChecker is EmailSecurityChecker
+
+    def test_resolve_stdlib_email_dir_survives_linux_base_prefix(self, monkeypatch):
+        import email
+        import os
+        import sys
+
+        monkeypatch.setattr(sys, "base_prefix", "/opt/hostedtoolcache/Python/3.13.7/x64")
+        resolved = email._resolve_stdlib_email_dir()
+        assert os.path.isdir(resolved)
+        assert os.path.isfile(os.path.join(resolved, "__init__.py"))
