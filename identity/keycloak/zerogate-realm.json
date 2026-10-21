@@ -1,0 +1,552 @@
+{
+  "id": "zerogate",
+  "realm": "zerogate",
+  "displayName": "ZeroGate Cloud",
+  "displayNameHtml": "<b>ZeroGate Cloud</b>",
+  "notBefore": 0,
+  "defaultSignatureAlgorithm": "RS256",
+  "revokeRefreshToken": false,
+  "refreshTokenMaxReuse": 0,
+  "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "ssoSessionIdleTimeoutRememberMe": 0,
+  "ssoSessionMaxLifespanRememberMe": 0,
+  "offlineSessionIdleTimeout": 2592000,
+  "offlineSessionMaxLifespanEnabled": false,
+  "offlineSessionMaxLifespan": 5184000,
+  "clientSessionIdleTimeout": 0,
+  "clientSessionMaxLifespan": 0,
+  "clientOfflineSessionIdleTimeout": 0,
+  "clientOfflineSessionMaxLifespan": 0,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "accessCodeLifespanLogin": 1800,
+  "actionTokenGeneratedByAdminLifespan": 43200,
+  "actionTokenGeneratedByUserLifespan": 300,
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": false,
+  "rememberMe": false,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxTemporaryLockouts": 0,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+  "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername and passwordHistory(3)",
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyInitialCounter": 0,
+  "otpPolicyDigits": 6,
+  "otpPolicyPeriod": 30,
+  "otpSupportedApplications": [
+    "totpAppFreeOTP",
+    "totpAppGoogleAuthenticator",
+    "totpAppMicrosoftAuthenticator"
+  ],
+  "eventsEnabled": true,
+  "eventsListeners": [
+    "jboss-logging"
+  ],
+  "enabledEventTypes": [
+    "LOGIN",
+    "LOGIN_ERROR",
+    "LOGOUT",
+    "CODE_TO_TOKEN",
+    "CODE_TO_TOKEN_ERROR"
+  ],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
+  "roles": {
+    "realm": [
+      {
+        "id": "role-employee",
+        "name": "employee",
+        "description": "Standard employee access to operational dashboards",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "zerogate"
+      },
+      {
+        "id": "role-analyst",
+        "name": "analyst",
+        "description": "Security and data analyst with Grafana and Gitea access",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "zerogate"
+      },
+      {
+        "id": "role-admin",
+        "name": "admin",
+        "description": "ZeroGate platform administrator with full access",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "zerogate"
+      },
+      {
+        "id": "role-auditor",
+        "name": "auditor",
+        "description": "Security and compliance auditor with read-only inspection access",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "zerogate"
+      }
+    ]
+  },
+  "groups": [
+    {
+      "id": "group-employees",
+      "name": "Employees",
+      "path": "/Employees",
+      "realmRoles": [
+        "employee"
+      ]
+    },
+    {
+      "id": "group-analysts",
+      "name": "Analysts",
+      "path": "/Analysts",
+      "realmRoles": [
+        "analyst"
+      ]
+    },
+    {
+      "id": "group-admins",
+      "name": "Admins",
+      "path": "/Admins",
+      "realmRoles": [
+        "admin"
+      ]
+    },
+    {
+      "id": "group-auditors",
+      "name": "Auditors",
+      "path": "/Auditors",
+      "realmRoles": [
+        "auditor"
+      ]
+    }
+  ],
+  "defaultRoles": [
+    "offline_access",
+    "uma_authorization"
+  ],
+  "clients": [
+    {
+      "id": "client-zerogate-grafana",
+      "clientId": "zerogate-grafana",
+      "name": "ZeroGate Grafana Access Proxy",
+      "description": "OpenID Connect Client for Grafana OAuth2 Proxy",
+      "rootUrl": "http://localhost:4180",
+      "adminUrl": "http://localhost:4180",
+      "baseUrl": "http://localhost:4180",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "f6930980171412cbcff3ed6e73cd6280",
+      "redirectUris": [
+        "http://localhost:4180/oauth2/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:4180"
+      ],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "publicClient": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "300",
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:4180/"
+      },
+      "protocolMappers": [
+        {
+          "id": "mapper-grafana-realm-roles",
+          "name": "realm-roles-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "true"
+          }
+        },
+        {
+          "id": "mapper-grafana-groups",
+          "name": "groups-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "zerogate-grafana",
+            "id.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-zerogate-gitea",
+      "clientId": "zerogate-gitea",
+      "name": "ZeroGate Gitea Access Proxy",
+      "description": "OpenID Connect Client for Gitea OAuth2 Proxy",
+      "rootUrl": "http://localhost:4181",
+      "adminUrl": "http://localhost:4181",
+      "baseUrl": "http://localhost:4181",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "c6b6f304fd262e6ae052e165aabed03c",
+      "redirectUris": [
+        "http://localhost:4181/oauth2/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:4181"
+      ],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "publicClient": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "300",
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:4181/"
+      },
+      "protocolMappers": [
+        {
+          "id": "mapper-gitea-realm-roles",
+          "name": "realm-roles-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "true"
+          }
+        },
+        {
+          "id": "mapper-gitea-groups",
+          "name": "groups-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "zerogate-gitea",
+            "id.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-zerogate-cli-test",
+      "clientId": "zerogate-cli-test",
+      "name": "ZeroGate Test & CLI Client",
+      "description": "Client for programmatic and automated testing of ZeroGate",
+      "rootUrl": "http://localhost:8080",
+      "baseUrl": "http://localhost:8080",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "redirectUris": [
+        "http://localhost:8080/cli/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:8080"
+      ],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "publicClient": true,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "300"
+      },
+      "protocolMappers": [
+        {
+          "id": "mapper-cli-realm-roles",
+          "name": "realm-roles-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "true"
+          }
+        },
+        {
+          "id": "mapper-cli-groups",
+          "name": "groups-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "zerogate-cli-test",
+            "id.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "user-alice-emp",
+      "username": "alice_emp",
+      "enabled": true,
+      "totp": false,
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Employee",
+      "email": "alice@zerogate.local",
+      "credentials": [
+        {
+          "type": "password",
+          "userLabel": "Initial Password",
+          "createdDate": 1729500000000,
+          "secretData": "{\"value\":\"Wf9v9r3X+0n76f/2X8+G0l4lqT3X0yM=\",\"salt\":\"rX1zK2g5j0=\",\"additionalParameters\":{}}",
+          "credentialData": "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\"}",
+          "value": "ZeroGate@2026Pass!"
+        }
+      ],
+      "realmRoles": [
+        "employee"
+      ],
+      "groups": [
+        "/Employees"
+      ]
+    },
+    {
+      "id": "user-bob-analyst",
+      "username": "bob_analyst",
+      "enabled": true,
+      "totp": false,
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Analyst",
+      "email": "bob@zerogate.local",
+      "credentials": [
+        {
+          "type": "password",
+          "userLabel": "Initial Password",
+          "createdDate": 1729500000000,
+          "value": "ZeroGate@2026Pass!"
+        }
+      ],
+      "realmRoles": [
+        "analyst"
+      ],
+      "groups": [
+        "/Analysts"
+      ]
+    },
+    {
+      "id": "user-carol-admin",
+      "username": "carol_admin",
+      "enabled": true,
+      "totp": false,
+      "emailVerified": true,
+      "firstName": "Carol",
+      "lastName": "Admin",
+      "email": "carol@zerogate.local",
+      "credentials": [
+        {
+          "type": "password",
+          "userLabel": "Initial Password",
+          "createdDate": 1729500000000,
+          "value": "ZeroGate@2026Pass!"
+        }
+      ],
+      "realmRoles": [
+        "admin"
+      ],
+      "groups": [
+        "/Admins"
+      ]
+    },
+    {
+      "id": "user-dave-auditor",
+      "username": "dave_auditor",
+      "enabled": true,
+      "totp": false,
+      "emailVerified": true,
+      "firstName": "Dave",
+      "lastName": "Auditor",
+      "email": "dave@zerogate.local",
+      "credentials": [
+        {
+          "type": "password",
+          "userLabel": "Initial Password",
+          "createdDate": 1729500000000,
+          "value": "ZeroGate@2026Pass!"
+        }
+      ],
+      "realmRoles": [
+        "auditor"
+      ],
+      "groups": [
+        "/Auditors"
+      ]
+    },
+    {
+      "id": "user-eve-norole",
+      "username": "eve_norole",
+      "enabled": true,
+      "totp": false,
+      "emailVerified": true,
+      "firstName": "Eve",
+      "lastName": "NoRole",
+      "email": "eve@zerogate.local",
+      "credentials": [
+        {
+          "type": "password",
+          "userLabel": "Initial Password",
+          "createdDate": 1729500000000,
+          "value": "ZeroGate@2026Pass!"
+        }
+      ],
+      "realmRoles": [],
+      "groups": []
+    },
+    {
+      "id": "user-mfa-user",
+      "username": "mfa_user",
+      "enabled": true,
+      "totp": true,
+      "emailVerified": true,
+      "firstName": "MFA",
+      "lastName": "EnrolledUser",
+      "email": "mfa_user@zerogate.local",
+      "credentials": [
+        {
+          "type": "password",
+          "userLabel": "Initial Password",
+          "createdDate": 1729500000000,
+          "value": "ZeroGate@2026Pass!"
+        },
+        {
+          "type": "otp",
+          "userLabel": "ZeroGate-Authenticator-Seed",
+          "createdDate": 1729500000000,
+          "secretData": "{\"value\":\"JBSWY3DPEHPK3PXP\"}",
+          "credentialData": "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
+        }
+      ],
+      "realmRoles": [
+        "employee",
+        "admin"
+      ],
+      "groups": [
+        "/Employees",
+        "/Admins"
+      ]
+    },
+    {
+      "id": "user-mfa-enroll",
+      "username": "mfa_enroll_user",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "MFA",
+      "lastName": "EnrollTest",
+      "email": "mfa_enroll@zerogate.local",
+      "credentials": [
+        {
+          "type": "password",
+          "userLabel": "Initial Password",
+          "value": "ZeroGate@2026Pass!"
+        }
+      ],
+      "requiredActions": [
+        "CONFIGURE_TOTP"
+      ],
+      "realmRoles": [
+        "employee"
+      ],
+      "groups": [
+        "/Employees"
+      ]
+    }
+  ]
+}

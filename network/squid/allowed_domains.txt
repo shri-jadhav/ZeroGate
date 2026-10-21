@@ -1,0 +1,17 @@
+# ZeroGate Cloud — Explicit Outbound Forward Proxy Allow-List
+# In Squid dstdomain, prefixing with a dot (.domain.com) matches both
+# domain.com and any subdomains (*.domain.com).
+
+.github.com
+.githubusercontent.com
+.docker.io
+.docker.com
+.quay.io
+.ubuntu.com
+.debian.org
+.python.org
+.pypi.org
+.pythonhosted.org
+.grafana.com
+.httpbin.org
+.example.com

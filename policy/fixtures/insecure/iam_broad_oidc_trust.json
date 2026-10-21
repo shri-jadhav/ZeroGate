@@ -1,0 +1,32 @@
+{
+  "role_name": "insecure-github-deploy-role",
+  "trust_policy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "OverlyBroadOIDCTrustWithWildcardSubjectAndMissingAudience",
+        "Effect": "Allow",
+        "Principal": {
+          "Federated": "arn:aws:iam::816954357920:oidc-provider/token.actions.githubusercontent.com"
+        },
+        "Action": "sts:AssumeRoleWithWebIdentity",
+        "Condition": {
+          "StringLike": {
+            "token.actions.githubusercontent.com:sub": "repo:*:*"
+          }
+        }
+      }
+    ]
+  },
+  "permissions_policy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "UnrestrictedWildcardAdmin",
+        "Effect": "Allow",
+        "Action": "*",
+        "Resource": "*"
+      }
+    ]
+  }
+}

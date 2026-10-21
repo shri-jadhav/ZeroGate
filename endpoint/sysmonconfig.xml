@@ -1,0 +1,52 @@
+<Sysmon schemaversion="4.90">
+  <!-- ZeroGate Cloud — Windows Endpoint Telemetry Configuration -->
+  <!-- Tailored for low-noise process creation, network connection, and file integrity auditing -->
+  <HashAlgorithms>SHA256,MD5</HashAlgorithms>
+  <CheckRevocation/>
+
+  <EventFiltering>
+    <!-- Event ID 1: Process Creation -->
+    <RuleGroup name="ProcessCreation" groupRelation="or">
+      <ProcessCreate onmatch="include">
+        <!-- Suspicious and administrative shells -->
+        <Image condition="image">powershell.exe</Image>
+        <Image condition="image">pwsh.exe</Image>
+        <Image condition="image">cmd.exe</Image>
+        <Image condition="image">wscript.exe</Image>
+        <Image condition="image">cscript.exe</Image>
+        <Image condition="image">mshta.exe</Image>
+        <Image condition="image">certutil.exe</Image>
+        <Image condition="image">curl.exe</Image>
+      </ProcessCreate>
+      <ProcessCreate onmatch="exclude">
+        <!-- Exclude noisy benign system background processes -->
+        <Image condition="begin with">C:\Windows\System32\conhost.exe</Image>
+      </ProcessCreate>
+    </RuleGroup>
+
+    <!-- Event ID 3: Network Connection Detected -->
+    <RuleGroup name="NetworkConnection" groupRelation="or">
+      <NetworkConnect onmatch="include">
+        <!-- Monitor egress through ZeroGate forward proxy & DNS resolver -->
+        <DestinationPort condition="is">3128</DestinationPort>
+        <DestinationPort condition="is">1053</DestinationPort>
+        <DestinationPort condition="is">53</DestinationPort>
+        <DestinationPort condition="is">8080</DestinationPort>
+        <DestinationPort condition="is">4180</DestinationPort>
+        <DestinationPort condition="is">4181</DestinationPort>
+        <!-- High-risk suspicious outbound ports -->
+        <DestinationPort condition="is">4444</DestinationPort>
+        <DestinationPort condition="is">1337</DestinationPort>
+      </NetworkConnect>
+    </RuleGroup>
+
+    <!-- Event ID 11: File Create / Overwrite -->
+    <RuleGroup name="FileCreation" groupRelation="or">
+      <FileCreate onmatch="include">
+        <!-- Track file activity in ZeroGate confidential folder -->
+        <TargetFilename condition="contains">\ZeroGate\data\confidential\</TargetFilename>
+        <TargetFilename condition="contains">\ZeroGate\quarantine\</TargetFilename>
+      </FileCreate>
+    </RuleGroup>
+  </EventFiltering>
+</Sysmon>

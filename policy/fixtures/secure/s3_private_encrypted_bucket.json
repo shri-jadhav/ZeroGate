@@ -1,0 +1,33 @@
+{
+  "bucket_name": "zerogate-cloud-dlp-lab-816954357920-ap-south-1",
+  "public_access_block": {
+    "block_public_acls": true,
+    "block_public_policy": true,
+    "ignore_public_acls": true,
+    "restrict_public_buckets": true
+  },
+  "encryption": {
+    "enabled": true,
+    "sse_algorithm": "AES256"
+  },
+  "bucket_policy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "DenyInsecureHTTPTransport",
+        "Effect": "Deny",
+        "Principal": "*",
+        "Action": "s3:*",
+        "Resource": [
+          "arn:aws:s3:::zerogate-cloud-dlp-lab-816954357920-ap-south-1",
+          "arn:aws:s3:::zerogate-cloud-dlp-lab-816954357920-ap-south-1/*"
+        ],
+        "Condition": {
+          "Bool": {
+            "aws:SecureTransport": "false"
+          }
+        }
+      }
+    ]
+  }
+}

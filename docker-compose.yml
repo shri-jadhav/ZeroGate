@@ -1,0 +1,265 @@
+services:
+  # ============================================================================
+  # Identity Layer: PostgreSQL for Keycloak
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: zerogate-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-keycloak}
+      POSTGRES_USER: ${POSTGRES_USER:-keycloak}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ZeroGatePostgresSecret2026!}
+    networks:
+      - zerogate-idp
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # ============================================================================
+  # Identity Layer: Keycloak Central OIDC Identity Provider
+  # ============================================================================
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1.0
+    container_name: zerogate-keycloak
+    restart: unless-stopped
+    command: start-dev --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-keycloak}
+      KC_DB_USERNAME: ${POSTGRES_USER:-keycloak}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-ZeroGatePostgresSecret2026!}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-ZeroGateMasterAdmin2026!}
+      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_LOG_LEVEL: "INFO"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - zerogate-dmz
+      - zerogate-idp
+      - zerogate-backend-grafana
+      - zerogate-backend-gitea
+    volumes:
+      - ./identity/keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      test: ["CMD", "/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+
+  # ============================================================================
+  # Internal Application A: Grafana (No host port published)
+  # ============================================================================
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: zerogate-grafana
+    restart: unless-stopped
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_AUTH_PROXY_ENABLED: "true"
+      GF_AUTH_PROXY_HEADER_NAME: "X-Forwarded-Preferred-Username"
+      GF_AUTH_PROXY_HEADER_PROPERTY: "username"
+      GF_AUTH_PROXY_AUTO_SIGN_UP: "true"
+      GF_AUTH_PROXY_WHITELIST: "10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.1"
+      GF_AUTH_PROXY_ENABLE_LOGIN_TOKEN: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-ZeroGateGrafanaAdmin2026!}
+      GF_SERVER_ROOT_URL: "http://localhost:4180"
+    networks:
+      - zerogate-backend-grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ============================================================================
+  # Identity-Aware Proxy: Grafana Access Proxy (oauth2-proxy)
+  # ============================================================================
+  oauth2-proxy-grafana:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    container_name: zerogate-proxy-grafana
+    restart: unless-stopped
+    command: ["--config=/etc/oauth2-proxy.cfg"]
+    environment:
+      OAUTH2_PROXY_CLIENT_SECRET: ${GRAFANA_CLIENT_SECRET}
+      OAUTH2_PROXY_COOKIE_SECRET: ${GRAFANA_COOKIE_SECRET}
+    ports:
+      - "4180:4180"
+    extra_hosts:
+      - "localhost:host-gateway"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      grafana:
+        condition: service_healthy
+    networks:
+      - zerogate-dmz
+      - zerogate-backend-grafana
+    volumes:
+      - ./access/proxy/grafana-proxy.cfg:/etc/oauth2-proxy.cfg:ro
+
+  # ============================================================================
+  # Internal Application B: Gitea (No host port published)
+  # ============================================================================
+  gitea:
+    image: gitea/gitea:1.22.3
+    container_name: zerogate-gitea
+    restart: unless-stopped
+    environment:
+      USER_UID: 1000
+      USER_GID: 1000
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__security__SECRET_KEY: "zerogatesecretkeydevelopmentonlyphase1"
+      GITEA__server__ROOT_URL: "http://localhost:4181"
+      GITEA__server__DOMAIN: "localhost"
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__service__ENABLE_REVERSE_PROXY_AUTHENTICATION: "true"
+      GITEA__service__ENABLE_REVERSE_PROXY_AUTO_REGISTRATION: "true"
+      GITEA__service__REVERSE_PROXY_AUTHENTICATION_USER: "X-Forwarded-Preferred-Username"
+      GITEA__service__REVERSE_PROXY_AUTHENTICATION_EMAIL: "X-Forwarded-Email"
+      GITEA__service__REVERSE_PROXY_TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1"
+      GITEA__service__DISABLE_REGISTRATION: "true"
+      GITEA__service__ALLOW_ONLY_EXTERNAL_REGISTRATION: "true"
+    networks:
+      - zerogate-backend-gitea
+    volumes:
+      - gitea_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ============================================================================
+  # Identity-Aware Proxy: Gitea Access Proxy (oauth2-proxy)
+  # ============================================================================
+  oauth2-proxy-gitea:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    container_name: zerogate-proxy-gitea
+    restart: unless-stopped
+    command: ["--config=/etc/oauth2-proxy.cfg"]
+    environment:
+      OAUTH2_PROXY_CLIENT_SECRET: ${GITEA_CLIENT_SECRET}
+      OAUTH2_PROXY_COOKIE_SECRET: ${GITEA_COOKIE_SECRET}
+    ports:
+      - "4181:4180"
+    extra_hosts:
+      - "localhost:host-gateway"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      gitea:
+        condition: service_healthy
+    networks:
+      - zerogate-dmz
+      - zerogate-backend-gitea
+    volumes:
+      - ./access/proxy/gitea-proxy.cfg:/etc/oauth2-proxy.cfg:ro
+
+  # ============================================================================
+  # Network Security Layer: Squid Outbound Forward Proxy (Phase 2)
+  # ============================================================================
+  squid:
+    image: ubuntu/squid:5.2-22.04_beta
+    container_name: zerogate-squid
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3128:3128"
+    networks:
+      - zerogate-dmz
+      - zerogate-network-sec
+    volumes:
+      - ./network/squid/squid.conf:/etc/squid/squid.conf:ro
+      - ./network/squid/allowed_domains.txt:/etc/squid/allowed_domains.txt:ro
+      - squid_logs:/var/log/squid
+    healthcheck:
+      test: ["CMD-SHELL", "squid -k check || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # ============================================================================
+  # Network Security Layer: Unbound Validating DNS Resolver (Phase 2)
+  # ============================================================================
+  unbound:
+    image: mvance/unbound:latest
+    container_name: zerogate-unbound
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1053:53/udp"
+      - "127.0.0.1:1053:53/tcp"
+    networks:
+      - zerogate-dmz
+      - zerogate-network-sec
+    volumes:
+      - ./network/unbound/unbound.conf:/opt/unbound/etc/unbound/unbound.conf:ro
+      - ./network/unbound/blocklist.conf:/opt/unbound/etc/unbound/blocklist.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "drill @127.0.0.1 cloudflare.com || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+# ==============================================================================
+# Network Architecture: Zero Trust Isolation
+# ==============================================================================
+networks:
+  # Public DMZ: Only Keycloak and Access Proxies publish ports to host
+  zerogate-dmz:
+    name: zerogate-dmz
+    driver: bridge
+
+  # Identity Layer: Isolated private network for Keycloak and its database
+  zerogate-idp:
+    name: zerogate-idp
+    driver: bridge
+
+  # Application A Backend: Isolated private network for Grafana
+  zerogate-backend-grafana:
+    name: zerogate-backend-grafana
+    driver: bridge
+
+  # Application B Backend: Isolated private network for Gitea
+  zerogate-backend-gitea:
+    name: zerogate-backend-gitea
+    driver: bridge
+
+  # Network Security Layer: Dedicated network for Squid and Unbound
+  zerogate-network-sec:
+    name: zerogate-network-sec
+    driver: bridge
+
+# ==============================================================================
+# Persistent Volumes
+# ==============================================================================
+volumes:
+  postgres_data:
+    name: zerogate_postgres_data
+  grafana_data:
+    name: zerogate_grafana_data
+  gitea_data:
+    name: zerogate_gitea_data
+  squid_logs:
+    name: zerogate_squid_logs

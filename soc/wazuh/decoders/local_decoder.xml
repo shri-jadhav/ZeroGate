@@ -1,0 +1,52 @@
+<!-- ZeroGate SOC Local Decoders -->
+
+<!-- Squid forward proxy syslog decoder -->
+<decoder name="zerogate-squid">
+  <program_name>^squid</program_name>
+</decoder>
+
+<decoder name="zerogate-squid-fields">
+  <parent>zerogate-squid</parent>
+  <regex offset="after_parent">^\s*(\S+)\s+(\d+)\s+(\S+)\s+(\w+)/(\d+)\s+\d+\s+(\S+)\s+(\S+)</regex>
+  <order>extra_data,duration,srcip,action,id,protocol,url</order>
+</decoder>
+
+<!-- Squid forward proxy raw access log decoder -->
+<decoder name="zerogate-squid-raw">
+  <prematch>^\d+\.\d+\s+\d+\s+\S+\s+TCP_\S+/\d+</prematch>
+  <regex>^(\S+)\s+(\d+)\s+(\S+)\s+(\w+)/(\d+)\s+\d+\s+(\S+)\s+(\S+)</regex>
+  <order>extra_data,duration,srcip,action,id,protocol,url</order>
+</decoder>
+
+<!-- Keycloak identity event decoder -->
+<decoder name="zerogate-keycloak">
+  <prematch>org.keycloak.events|type=LOGIN|type=LOGIN_ERROR</prematch>
+</decoder>
+
+<decoder name="zerogate-keycloak-fields">
+  <parent>zerogate-keycloak</parent>
+  <regex>type=(\S+),\s+realmId=(\S+),\s+clientId=(\S+),\s+userId=(\S+),\s+ipAddress=(\S+)</regex>
+  <order>action,realm,client_id,srcuser,srcip</order>
+</decoder>
+
+<!-- ZeroGate DLP Scanner Syslog Decoder -->
+<decoder name="zerogate-dlp">
+  <program_name>^dlp</program_name>
+</decoder>
+
+<decoder name="zerogate-dlp-fields">
+  <parent>zerogate-dlp</parent>
+  <regex>action=(\S+)\s+file=(\S+)\s+detector=(\S+)\s+severity=(\S+)</regex>
+  <order>action,extra_data,protocol,status</order>
+</decoder>
+
+<!-- ZeroGate AWS CloudTrail Audit Decoder (Phase 4) -->
+<decoder name="zerogate-cloudtrail">
+  <program_name>^cloudtrail</program_name>
+</decoder>
+
+<decoder name="zerogate-cloudtrail-fields">
+  <parent>zerogate-cloudtrail</parent>
+  <regex>event=(\S+)\s+source=(\S+)\s+principal=(\S+)\s+status=(\S+)\s+region=(\S+)</regex>
+  <order>action,protocol,srcuser,status,extra_data</order>
+</decoder>

@@ -1,0 +1,133 @@
+<!-- ZeroGate SOC Local Detection Rules -->
+<group name="zerogate,">
+
+  <!-- ========================================================================= -->
+  <!-- Squid Forward Proxy Rules                                                -->
+  <!-- ========================================================================= -->
+
+  <!-- Rule 100220: Squid Proxy Denial (PRD Phase 2 requirement) -->
+  <rule id="100220" level="7">
+    <match>TCP_DENIED</match>
+    <description>ZeroGate: Squid forward proxy denied request to unapproved or blocklisted destination</description>
+    <mitre>
+      <id>T1071.001</id>
+      <id>T1090</id>
+    </mitre>
+    <group>zerogate,zerogate_proxy,proxy_denied,</group>
+  </rule>
+
+  <!-- ========================================================================= -->
+  <!-- Unbound DNS & Tunneling Detection Rules                                   -->
+  <!-- ========================================================================= -->
+
+  <!-- Rule 100221: Unusually long or random-looking DNS query label (DNS Tunneling) -->
+  <rule id="100221" level="8">
+    <if_sid>500101, 500102, 500002</if_sid>
+    <url type="pcre2">[a-zA-Z0-9_-]{25,}</url>
+    <description>ZeroGate: Suspicious DNS query with unusually long/encoded label (DNS tunneling indicator)</description>
+    <mitre>
+      <id>T1071.004</id>
+      <id>T1048.003</id>
+    </mitre>
+    <group>zerogate,zerogate_dns,dns_tunneling,</group>
+  </rule>
+
+  <!-- Correlated frequency rule for multiple tunneling queries -->
+  <rule id="100222" level="10" frequency="5" timeframe="60">
+    <if_matched_sid>100221</if_matched_sid>
+    <same_source_ip />
+    <description>ZeroGate: Multiple anomalous DNS tunneling queries detected from source host</description>
+    <mitre>
+      <id>T1071.004</id>
+      <id>T1048.003</id>
+    </mitre>
+    <group>zerogate,zerogate_dns,dns_tunneling,</group>
+  </rule>
+
+  <!-- ========================================================================= -->
+  <!-- Keycloak Identity Event Rules                                            -->
+  <!-- ========================================================================= -->
+
+  <!-- Keycloak Authentication Failure -->
+  <rule id="100230" level="6">
+    <match>type=LOGIN_ERROR|LOGIN_ERROR</match>
+    <description>ZeroGate: Keycloak user authentication failure detected</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>zerogate,zerogate_identity,authentication_failed,</group>
+  </rule>
+
+  <!-- Keycloak Potential Brute Force -->
+  <rule id="100231" level="10" frequency="5" timeframe="60">
+    <if_matched_sid>100230</if_matched_sid>
+    <description>ZeroGate: Multiple Keycloak authentication failures (potential brute-force attack)</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>zerogate,zerogate_identity,authentication_failed,</group>
+  </rule>
+
+  <!-- ========================================================================= -->
+  <!-- Data Loss Prevention (DLP) Detection Rules (PRD Phase 3)                  -->
+  <!-- ========================================================================= -->
+
+  <!-- Rule 100240: DLP Match on Sensitive Data Exposure (PRD requirement) -->
+  <rule id="100240" level="8">
+    <match>DLP_MATCH|action=QUARANTINE|action=REJECT</match>
+    <description>ZeroGate: DLP Scanner detected sensitive data exposure (file quarantined or rejected)</description>
+    <mitre>
+      <id>T1048</id>
+      <id>T1052</id>
+    </mitre>
+    <group>zerogate,zerogate_dlp,data_loss_prevention,</group>
+  </rule>
+
+  <!-- Rule 100241: Critical Credential / Secret Key DLP Leak -->
+  <rule id="100241" level="10">
+    <if_sid>100240</if_sid>
+    <match>SECRET_|severity=CRITICAL</match>
+    <description>ZeroGate: Critical API credential or secret key detected in scanned document</description>
+    <mitre>
+      <id>T1552</id>
+      <id>T1048</id>
+    </mitre>
+    <group>zerogate,zerogate_dlp,credential_leak,</group>
+  </rule>
+
+  <!-- ========================================================================= -->
+  <!-- AWS CloudTrail & Cloud DLP Detection Rules (PRD Phase 4)                  -->
+  <!-- ========================================================================= -->
+
+  <!-- Rule 100250: AWS CloudTrail Management / Federation Audit Event -->
+  <rule id="100250" level="6">
+    <match>CLOUDTRAIL_AUDIT|event=AssumeRole|event=AssumeRoleWithWebIdentity|event=PutBucketPolicy|event=CreateTrail</match>
+    <description>ZeroGate Cloud: AWS CloudTrail management or OIDC role-assumption event recorded</description>
+    <mitre>
+      <id>T1078.004</id>
+    </mitre>
+    <group>zerogate,zerogate_cloud,aws_cloudtrail,</group>
+  </rule>
+
+  <!-- Rule 100251: AWS CloudTrail Unauthorized API Call / AccessDenied -->
+  <rule id="100251" level="9">
+    <match>CLOUDTRAIL_DENIED|status=AccessDenied|status=UnauthorizedOperation</match>
+    <description>ZeroGate Cloud: AWS CloudTrail detected unauthorized API call or IAM role boundary violation</description>
+    <mitre>
+      <id>T1078.004</id>
+      <id>T1580</id>
+    </mitre>
+    <group>zerogate,zerogate_cloud,aws_cloudtrail,access_denied,</group>
+  </rule>
+
+  <!-- Rule 100252: AWS S3 Cloud DLP Finding -->
+  <rule id="100252" level="9">
+    <match>S3_DLP_MATCH</match>
+    <description>ZeroGate Cloud: Read-only S3 DLP scanner detected synthetic PII or secret in cloud storage object</description>
+    <mitre>
+      <id>T1530</id>
+    </mitre>
+    <group>zerogate,zerogate_cloud,zerogate_dlp,s3_dlp,</group>
+  </rule>
+
+</group>

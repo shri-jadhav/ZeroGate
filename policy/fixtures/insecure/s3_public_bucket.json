@@ -1,0 +1,25 @@
+{
+  "bucket_name": "insecure-public-unencrypted-bucket",
+  "public_access_block": {
+    "block_public_acls": false,
+    "block_public_policy": false,
+    "ignore_public_acls": false,
+    "restrict_public_buckets": false
+  },
+  "encryption": {
+    "enabled": false,
+    "sse_algorithm": ""
+  },
+  "bucket_policy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "PublicReadGetObject",
+        "Effect": "Allow",
+        "Principal": "*",
+        "Action": "s3:GetObject",
+        "Resource": "arn:aws:s3:::insecure-public-unencrypted-bucket/*"
+      }
+    ]
+  }
+}

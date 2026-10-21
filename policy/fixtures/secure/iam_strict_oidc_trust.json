@@ -1,0 +1,43 @@
+{
+  "role_name": "zerogate-cloud-lab-github-deploy-role",
+  "trust_policy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "AllowGitHubActionsOIDCExactRepoAndBranch",
+        "Effect": "Allow",
+        "Principal": {
+          "Federated": "arn:aws:iam::816954357920:oidc-provider/token.actions.githubusercontent.com"
+        },
+        "Action": "sts:AssumeRoleWithWebIdentity",
+        "Condition": {
+          "StringEquals": {
+            "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+            "token.actions.githubusercontent.com:sub": [
+              "repo:shri-jadhav/ZeroGate:ref:refs/heads/main",
+              "repo:shri-jadhav/ZeroGate:environment:production"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "permissions_policy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "ScopedS3LabBucketAccess",
+        "Effect": "Allow",
+        "Action": [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:ListBucket"
+        ],
+        "Resource": [
+          "arn:aws:s3:::zerogate-cloud-dlp-lab-816954357920-ap-south-1",
+          "arn:aws:s3:::zerogate-cloud-dlp-lab-816954357920-ap-south-1/*"
+        ]
+      }
+    ]
+  }
+}

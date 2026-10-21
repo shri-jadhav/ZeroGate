@@ -1,0 +1,49 @@
+{
+  "realm": "zerogate-insecure-wildcard-fixture",
+  "enabled": true,
+  "bruteForceProtected": true,
+  "failureFactor": 5,
+  "otpPolicyType": "totp",
+  "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)",
+  "clients": [
+    {
+      "clientId": "zerogate-grafana",
+      "enabled": true,
+      "redirectUris": [
+        "http://localhost:4180/*"
+      ]
+    },
+    {
+      "clientId": "zerogate-gitea",
+      "enabled": true,
+      "redirectUris": [
+        "*"
+      ]
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "browser",
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-otp-form",
+          "requirement": "REQUIRED"
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "carol_admin",
+      "enabled": true,
+      "groups": ["/Admin"],
+      "realmRoles": ["admin"],
+      "requiredActions": ["CONFIGURE_TOTP"],
+      "credentials": [
+        {
+          "type": "password"
+        }
+      ]
+    }
+  ]
+}

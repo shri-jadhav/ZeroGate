@@ -1,0 +1,45 @@
+{
+  "realm": "zerogate-insecure-fixture",
+  "enabled": true,
+  "bruteForceProtected": true,
+  "failureFactor": 5,
+  "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)",
+  "clients": [
+    {
+      "clientId": "zerogate-grafana",
+      "enabled": true,
+      "redirectUris": [
+        "http://localhost:4180/oauth2/callback"
+      ]
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "browser",
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "requirement": "REQUIRED"
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "requirement": "DISABLED"
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "carol_admin",
+      "enabled": true,
+      "groups": ["/Admin"],
+      "realmRoles": ["admin"],
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password"
+        }
+      ]
+    }
+  ]
+}
