@@ -32,8 +32,9 @@ def sanitize_filename(filename: str) -> str:
     if "\0" in filename:
         raise UploadPolicyError("Filename contains invalid null byte")
 
-    # Extract pure filename, stripping directory paths
-    base = Path(filename).name
+    # Extract pure filename, stripping both POSIX (/) and Windows (\) directory paths
+    normalized = filename.replace("\\", "/")
+    base = Path(normalized).name
 
     # Check for empty or traversal remnants
     if not base or base in (".", ".."):
